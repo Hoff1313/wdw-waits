@@ -74,7 +74,6 @@ body{ font-family:'Outfit', system-ui, -apple-system, "Segoe UI", Roboto, sans-s
 .tags{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
 .pill{ font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:3px 7px; border-radius:6px; background:#eef1f6; color:#5a647a; }
 .pill.ll{ background:#efe9ff; color:#5a3fc0; }
-.pill.vq{ background:#e2f3ff; color:#1f6fa8; }
 
 .num{ padding:11px 14px; display:flex; align-items:baseline; gap:6px; }
 .num .n{ font-size:38px; font-weight:800; line-height:.9; letter-spacing:-.03em; }
@@ -90,6 +89,17 @@ body{ font-family:'Outfit', system-ui, -apple-system, "Segoe UI", Roboto, sans-s
 
 .show{ padding:12px 14px; font-size:13px; font-weight:600; color:var(--accentInk); background:var(--accentSoft); }
 .show small{ display:block; font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:3px; }
+
+.loc{ font-size:12.5px; font-weight:600; color:var(--muted); margin-top:7px; line-height:1.35; }
+.meet{ padding:12px 14px; font-size:14px; font-weight:700; color:var(--accentInk); background:var(--accentSoft); }
+.meet small{ display:block; font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:3px; }
+.meet-wait{ display:block; font-size:12px; font-weight:600; color:var(--muted); margin-top:3px; }
+
+.parade{ padding:12px 14px; background:var(--accentSoft); }
+.parade small{ display:block; font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:7px; }
+.ptimes{ display:flex; flex-wrap:wrap; gap:6px; }
+.ptime{ font-size:13px; font-weight:700; color:var(--ink); background:#eef1f6; padding:4px 9px; border-radius:7px; }
+.ptime.next{ background:var(--accent); color:#fff; }
 
 .msg{ text-align:center; padding:54px 20px; color:var(--muted); }
 .msg h3{ color:var(--ink); font-size:18px; margin:0 0 6px; }
@@ -125,8 +135,10 @@ body{ font-family:'Outfit', system-ui, -apple-system, "Segoe UI", Roboto, sans-s
       <input id="search" placeholder="Search rides…" autocomplete="off" />
     </div>
     <div class="seg" id="typeSeg" role="group" aria-label="Type">
-      <button data-type="ATTRACTION" aria-pressed="true">Rides</button>
-      <button data-type="SHOW" aria-pressed="false">Shows</button>
+      <button data-type="ride" aria-pressed="true">Rides</button>
+      <button data-type="show" aria-pressed="false">Shows</button>
+      <button data-type="parade" aria-pressed="false">Parades</button>
+      <button data-type="meet" aria-pressed="false">Meets</button>
     </div>
     <div class="seg" id="sortSeg" role="group" aria-label="Sort">
       <button data-sort="wait" aria-pressed="true">Shortest</button>
@@ -160,11 +172,38 @@ const PARKS = [
 ];
 
 const state = { parkId:PARKS[0].id, items:[], loading:true, error:null, fetchedAt:null,
-  query:"", type:"ATTRACTION", sort:"wait", openOnly:false };
+  query:"", type:"ride", sort:"wait", openOnly:false };
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
 const standby = (it) => (it && it.queue && it.queue.STANDBY && it.queue.STANDBY.waitTime != null) ? it.queue.STANDBY.waitTime : null;
+
+// Character meets read as "Meet <character> at <venue>" in the feed.
+const isMeet = (it) => /^meet\b/i.test(it.name || "") || /\bmeet (?:&|and|the)\b/i.test(it.name || "");
+// Parades & cavalcades — named shows that move on a route at set times.
+const isParade = (it) => /\b(parade|cavalcade)\b/i.test(it.name || "") || /\bstarlight\b/i.test(it.name || "");
+function category(it){
+  if (it.entityType !== "ATTRACTION" && it.entityType !== "SHOW") return null; // skip PARK/RESTAURANT
+  if (isMeet(it)) return "meet";
+  if (it.entityType === "SHOW" && isParade(it)) return "parade";
+  return it.entityType === "SHOW" ? "show" : "ride";
+}
+// Split "Meet Ariel at Her Grotto" -> { label:"Meet Ariel", location:"Her Grotto" }
+function splitVenue(name){
+  const i = (name || "").toLowerCase().lastIndexOf(" at ");
+  if (i === -1) return { label:name, location:null };
+  return { label:name.slice(0, i), location:name.slice(i + 4) };
+}
+// Continuous open–close window for a meet (from operating hours, else showtimes).
+function dayWindow(it){
+  let blocks = (it.operatingHours || []).filter(o => o.type === "Operating");
+  if (!blocks.length) blocks = it.operatingHours || [];
+  if (!blocks.length) blocks = it.showtimes || [];
+  if (!blocks.length) return null;
+  let start = blocks[0].startTime, end = blocks[0].endTime;
+  blocks.forEach(b => { if (b.startTime < start) start = b.startTime; if (b.endTime > end) end = b.endTime; });
+  return (start && end) ? { start, end } : null;
+}
 
 function waitBand(min){
   if (min == null) return null;
@@ -226,7 +265,7 @@ function buildTabs(){
 }
 
 function computeList(){
-  let arr = state.items.filter(it => it.entityType === state.type);
+  let arr = state.items.filter(it => category(it) === state.type);
   if (state.openOnly) arr = arr.filter(it => it.status === "OPERATING");
   const q = state.query.trim().toLowerCase();
   if (q) arr = arr.filter(it => (it.name||"").toLowerCase().includes(q));
@@ -242,30 +281,66 @@ function computeList(){
 }
 
 function renderStats(list){
-  const rides = state.items.filter(it => it.entityType === "ATTRACTION");
+  const rides = state.items.filter(it => category(it) === "ride");
   const open = rides.filter(it => it.status === "OPERATING");
   const waits = open.map(standby).filter(w => w != null);
   const avg = waits.length ? Math.round(waits.reduce((a,b)=>a+b,0)/waits.length) : null;
   let best = null;
   open.forEach(it => { const w = standby(it); if (w==null) return; if (!best || w < best.w) best = {w, name:it.name}; });
+  const label = state.type === "ride" ? "Rides" : state.type === "show" ? "Shows" : state.type === "parade" ? "Parades" : "Meets";
   $("stats").innerHTML =
     `<div class="stat"><div class="v">${open.length}<span class="sm">/${rides.length}</span></div><div class="k">Rides open</div></div>
      <div class="stat"><div class="v">${avg!=null?avg:"—"}<span class="sm">${avg!=null?" min":""}</span></div><div class="k">Average wait</div></div>
      <div class="stat"><div class="v" style="color:var(--accentInk)">${best?best.w:"—"}<span class="sm">${best?" min":""}</span></div><div class="k">Shortest now</div>${best?`<div class="pick">${esc(best.name)}</div>`:""}</div>
-     <div class="stat"><div class="v">${state.type==="ATTRACTION"?"Rides":"Shows"}</div><div class="k">${list.length} listed</div></div>`;
+     <div class="stat"><div class="v">${label}</div><div class="k">${list.length} listed</div></div>`;
 }
 
 function signHTML(it){
+  const cat = category(it);
   const ll = it.queue && it.queue.PAID_RETURN_TIME;
-  const vq = it.queue && it.queue.RETURN_TIME;
   const llTime = ll && ll.returnStart ? clock(ll.returnStart) : null;
-  const isShow = it.entityType === "SHOW";
+
+  // Character meet — show venue + the continuous window it's available.
+  if (cat === "meet"){
+    const { label, location } = splitVenue(it.name);
+    const win = dayWindow(it);
+    const w = standby(it);
+    let body;
+    if (it.status === "OPERATING"){
+      const hours = win ? `${clock(win.start)} – ${clock(win.end)}` : "Open now";
+      const waitLine = (w != null) ? `<span class="meet-wait">${w === 0 ? "Walk up" : w + " min wait"}</span>` : "";
+      body = `<div class="meet"><small>Meet &amp; greet</small>${esc(hours)}${waitLine}</div>`;
+    } else if (it.status === "DOWN"){
+      body = `<div class="status down"><span class="ic"></span> Paused</div>`;
+    } else {
+      body = `<div class="status closed"><span class="ic"></span> Not meeting now</div>`;
+    }
+    const loc = location ? `<div class="loc">📍 ${esc(location)}</div>` : "";
+    return `<div class="sign"><div class="top"><div class="name">${esc(label)}</div>${loc}</div>${body}</div>`;
+  }
+
+  // Parade — list today's scheduled times, highlight the next one.
+  if (cat === "parade"){
+    const times = [...new Set((it.showtimes || []).map(s => s.startTime))].sort();
+    let body;
+    if (it.status !== "OPERATING" || !times.length){
+      body = `<div class="status closed"><span class="ic"></span> Not scheduled today</div>`;
+    } else {
+      const now = Date.now();
+      const chips = times.map(t => {
+        const upcoming = new Date(t).getTime() > now;
+        return `<span class="ptime${upcoming ? " next" : ""}">${esc(clock(t) || "")}</span>`;
+      }).join("");
+      body = `<div class="parade"><small>${times.length > 1 ? "Today's times" : "Today"}</small><div class="ptimes">${chips}</div></div>`;
+    }
+    return `<div class="sign"><div class="top"><div class="name">${esc(it.name)}</div></div>${body}</div>`;
+  }
+
   let tags = "";
   if (llTime) tags += `<span class="pill ll">Lightning Lane · ${esc(llTime)}</span>`;
-  if (vq && vq.state === "AVAILABLE") tags += `<span class="pill vq">Virtual queue</span>`;
 
   let footer;
-  if (it.status === "OPERATING" && !isShow){
+  if (it.status === "OPERATING" && cat === "ride"){
     const w = standby(it); const band = waitBand(w);
     if (band){
       footer = band.key === "walk"
@@ -274,7 +349,7 @@ function signHTML(it){
     } else {
       footer = `<div class="num" style="background:#f3f4f7;color:#6a7388"><span class="n" style="font-size:22px;align-self:center">Open</span><span class="eyebrow">No posted wait</span></div>`;
     }
-  } else if (it.status === "OPERATING" && isShow){
+  } else if (it.status === "OPERATING" && cat === "show"){
     const upcoming = (it.showtimes||[]).find(s => new Date(s.startTime).getTime() > Date.now()) || (it.showtimes||[])[0];
     footer = `<div class="show"><small>${upcoming?"Next show":"Status"}</small>${upcoming ? (clock(upcoming.startTime)||"Scheduled") : "Operating"}</div>`;
   } else if (it.status === "DOWN"){
@@ -298,7 +373,7 @@ function render(){
     c.innerHTML = `<div class="msg"><h3>Couldn't load live data</h3><p>The wait-time service didn't respond. Check your connection and try again.</p><button id="retry">Try again</button></div>`;
     $("retry").addEventListener("click", () => load(false));
   } else if (list.length === 0){
-    const kind = state.type === "ATTRACTION" ? "rides" : "shows";
+    const kind = state.type === "ride" ? "rides" : state.type === "show" ? "shows" : state.type === "parade" ? "parades" : "meets";
     c.innerHTML = `<div class="msg"><h3>Nothing to show</h3><p>${state.query?`No ${kind} match "${esc(state.query)}".`:"No matching attractions right now."}</p></div>`;
   } else {
     c.innerHTML = `<div class="grid">${list.map(signHTML).join("")}</div>`;
