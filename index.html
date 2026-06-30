@@ -74,6 +74,7 @@ body{ font-family:'Outfit', system-ui, -apple-system, "Segoe UI", Roboto, sans-s
 .tags{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
 .pill{ font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:3px 7px; border-radius:6px; background:#eef1f6; color:#5a647a; }
 .pill.ll{ background:#efe9ff; color:#5a3fc0; }
+.pill.stale{ background:#fff5e6; color:#9a6708; }
 
 .num{ padding:11px 14px; display:flex; align-items:baseline; gap:6px; }
 .num .n{ font-size:38px; font-weight:800; line-height:.9; letter-spacing:-.03em; }
@@ -236,6 +237,12 @@ function timeAgo(ts){
   return Math.round(m/60)+"h ago";
 }
 function clock(iso){ if(!iso) return null; try { return new Date(iso).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}); } catch(e){ return null; } }
+// Minutes since the feed last refreshed this entry — returns null if recent (<30m) or unknown.
+function staleMins(it){
+  if (!it.lastUpdated) return null;
+  const m = Math.round((Date.now() - new Date(it.lastUpdated).getTime()) / 60000);
+  return (m >= 30) ? m : null;
+}
 const park = () => PARKS.find(p => p.id === state.parkId);
 
 async function load(soft){
@@ -332,6 +339,8 @@ function signHTML(it){
 
   let tags = "";
   if (llTime) tags += `<span class="pill ll">Lightning Lane · ${esc(llTime)}</span>`;
+  const stale = staleMins(it);
+  if (stale != null && it.status === "OPERATING") tags += `<span class="pill stale">⚠ As of ${esc(clock(it.lastUpdated) || "")}</span>`;
 
   let footer;
   if (it.status === "OPERATING" && cat === "ride"){
