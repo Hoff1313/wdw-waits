@@ -138,7 +138,6 @@ body{ font-family:'Outfit', system-ui, -apple-system, "Segoe UI", Roboto, sans-s
       <button data-type="ride" aria-pressed="true">Rides</button>
       <button data-type="show" aria-pressed="false">Shows</button>
       <button data-type="parade" aria-pressed="false">Parades</button>
-      <button data-type="meet" aria-pressed="false">Meets</button>
     </div>
     <div class="seg" id="sortSeg" role="group" aria-label="Sort">
       <button data-sort="wait" aria-pressed="true">Shortest</button>
@@ -178,13 +177,27 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
 const standby = (it) => (it && it.queue && it.queue.STANDBY && it.queue.STANDBY.waitTime != null) ? it.queue.STANDBY.waitTime : null;
 
-// Character meets read as "Meet <character> at <venue>" in the feed.
-const isMeet = (it) => /^meet\b/i.test(it.name || "") || /\bmeet (?:&|and|the)\b/i.test(it.name || "");
 // Parades & cavalcades — named shows that move on a route at set times.
 const isParade = (it) => /\b(parade|cavalcade)\b/i.test(it.name || "") || /\bstarlight\b/i.test(it.name || "");
+// Known meetable characters, for appearances listed by name only (e.g. "Chip 'n Dale").
+const MEET_NAMES = /\b(mickey|minnie|donald|daisy|goofy|pluto|chip|dale|buzz lightyear|woody|jessie|bo peep|green army|sulley|mike wazowski|mandalorian|chewbacca|darth vader|kylo ren|stormtrooper|bb-?8|r2-?d2|c-?3po|sebastian|ariel|tiana|cinderella|snow white|rapunzel|belle|jasmine|aurora|merida|pocahontas|mulan|moana|mirabel|anna|elsa|olaf|kristoff|stitch|edna|doc mcstuffins|vampirina|fancy nancy|baymax|pixar pals|disney pals|princess)\b/i;
+// Words that mark a staged show rather than a meet — block name-based matches.
+const SHOW_WORDS = /\b(stage|sing-?along|spectacular|musical|concert|fireworks|symphony|celebration|jamboree|faire|stunt|playhouse|academy|dance|street party|festival|hyperspace|projection|nighttime|live|club|clubhouse|show|trek|tour|training|playground|theater|theatre)\b/i;
+// Character meets: explicit "Meet ..." names, a walk-up line (STANDBY), a continuous
+// "Operating" window, or a bare character name that isn't a staged show. The mix is
+// needed because the feed lists some meets by character only (e.g. "The Mandalorian").
+function isMeet(it){
+  const name = it.name || "";
+  if (/^meet\b/i.test(name) || /\b(meet|greet)\b/i.test(name)) return true;
+  if (it.entityType !== "SHOW" || isParade(it)) return false;
+  if (it.queue && it.queue.STANDBY) return true;
+  if ((it.showtimes || []).some(s => s.type === "Operating")) return true;
+  if (MEET_NAMES.test(name) && !SHOW_WORDS.test(name)) return true;
+  return false;
+}
 function category(it){
   if (it.entityType !== "ATTRACTION" && it.entityType !== "SHOW") return null; // skip PARK/RESTAURANT
-  if (isMeet(it)) return "meet";
+  if (isMeet(it)) return null; // character meets aren't tracked per-character upstream — hide them
   if (it.entityType === "SHOW" && isParade(it)) return "parade";
   return it.entityType === "SHOW" ? "show" : "ride";
 }
@@ -287,7 +300,7 @@ function renderStats(list){
   const avg = waits.length ? Math.round(waits.reduce((a,b)=>a+b,0)/waits.length) : null;
   let best = null;
   open.forEach(it => { const w = standby(it); if (w==null) return; if (!best || w < best.w) best = {w, name:it.name}; });
-  const label = state.type === "ride" ? "Rides" : state.type === "show" ? "Shows" : state.type === "parade" ? "Parades" : "Meets";
+  const label = state.type === "ride" ? "Rides" : state.type === "show" ? "Shows" : "Parades";
   $("stats").innerHTML =
     `<div class="stat"><div class="v">${open.length}<span class="sm">/${rides.length}</span></div><div class="k">Rides open</div></div>
      <div class="stat"><div class="v">${avg!=null?avg:"—"}<span class="sm">${avg!=null?" min":""}</span></div><div class="k">Average wait</div></div>
@@ -299,25 +312,6 @@ function signHTML(it){
   const cat = category(it);
   const ll = it.queue && it.queue.PAID_RETURN_TIME;
   const llTime = ll && ll.returnStart ? clock(ll.returnStart) : null;
-
-  // Character meet — show venue + the continuous window it's available.
-  if (cat === "meet"){
-    const { label, location } = splitVenue(it.name);
-    const win = dayWindow(it);
-    const w = standby(it);
-    let body;
-    if (it.status === "OPERATING"){
-      const hours = win ? `${clock(win.start)} – ${clock(win.end)}` : "Open now";
-      const waitLine = (w != null) ? `<span class="meet-wait">${w === 0 ? "Walk up" : w + " min wait"}</span>` : "";
-      body = `<div class="meet"><small>Meet &amp; greet</small>${esc(hours)}${waitLine}</div>`;
-    } else if (it.status === "DOWN"){
-      body = `<div class="status down"><span class="ic"></span> Paused</div>`;
-    } else {
-      body = `<div class="status closed"><span class="ic"></span> Not meeting now</div>`;
-    }
-    const loc = location ? `<div class="loc">📍 ${esc(location)}</div>` : "";
-    return `<div class="sign"><div class="top"><div class="name">${esc(label)}</div>${loc}</div>${body}</div>`;
-  }
 
   // Parade — list today's scheduled times, highlight the next one.
   if (cat === "parade"){
@@ -373,7 +367,7 @@ function render(){
     c.innerHTML = `<div class="msg"><h3>Couldn't load live data</h3><p>The wait-time service didn't respond. Check your connection and try again.</p><button id="retry">Try again</button></div>`;
     $("retry").addEventListener("click", () => load(false));
   } else if (list.length === 0){
-    const kind = state.type === "ride" ? "rides" : state.type === "show" ? "shows" : state.type === "parade" ? "parades" : "meets";
+    const kind = state.type === "ride" ? "rides" : state.type === "show" ? "shows" : "parades";
     c.innerHTML = `<div class="msg"><h3>Nothing to show</h3><p>${state.query?`No ${kind} match "${esc(state.query)}".`:"No matching attractions right now."}</p></div>`;
   } else {
     c.innerHTML = `<div class="grid">${list.map(signHTML).join("")}</div>`;
