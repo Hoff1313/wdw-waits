@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#5b4bd6" />
+<title>WDW Live Wait Times</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+
+*{ box-sizing:border-box; margin:0; padding:0; }
+:root{ --bg:#eef1f6; --card:#ffffff; --ink:#141b2e; --muted:#6a7388; --line:#e1e6ef;
+  --accent:#5b4bd6; --accentInk:#2b2270; --accentSoft:rgba(91,75,214,0.12); }
+html,body{ background:var(--bg); }
+body{ font-family:'Outfit', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color:var(--ink); min-height:100vh; -webkit-font-smoothing:antialiased; }
+
+.band{ background:var(--accent); color:#fff; padding:22px 20px 26px;
+  transition:background .45s ease; position:relative; overflow:hidden;
+  padding-top:calc(22px + env(safe-area-inset-top)); }
+.band::after{ content:""; position:absolute; right:-60px; top:-80px; width:240px; height:240px;
+  background:rgba(255,255,255,0.10); border-radius:50%; }
+.inner{ max-width:1080px; margin:0 auto; position:relative; z-index:1; }
+.kicker{ display:flex; align-items:center; gap:8px; font-size:12px; font-weight:600;
+  letter-spacing:.14em; text-transform:uppercase; opacity:.92; }
+.dot{ width:8px; height:8px; border-radius:50%; background:#7dffb0; animation:pulse 2.2s infinite; }
+@keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(125,255,176,.6);} 70%{box-shadow:0 0 0 9px rgba(125,255,176,0);} 100%{box-shadow:0 0 0 0 rgba(125,255,176,0);} }
+.title{ font-size:30px; font-weight:800; letter-spacing:-.02em; margin:6px 0 2px; line-height:1.05; }
+.sub{ font-size:14px; opacity:.9; font-weight:500; }
+
+.tabs{ display:flex; gap:8px; overflow-x:auto; padding:14px 20px 0; max-width:1080px;
+  margin:0 auto; scrollbar-width:none; }
+.tabs::-webkit-scrollbar{ display:none; }
+.tab{ flex:0 0 auto; border:none; cursor:pointer; padding:9px 16px; border-radius:999px;
+  font-family:inherit; font-size:14px; font-weight:600; background:rgba(255,255,255,.16); color:#fff;
+  transition:transform .15s ease, background .2s ease; white-space:nowrap; }
+.tab:hover{ background:rgba(255,255,255,.28); }
+.tab[aria-selected="true"]{ background:#fff; color:var(--accentInk); transform:translateY(-1px); }
+.tabs-wrap{ background:var(--accent); transition:background .45s ease; }
+
+.body{ max-width:1080px; margin:0 auto; padding:18px 20px 60px; }
+
+.stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:14px 0 6px; }
+.stat{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; }
+.stat .v{ font-size:24px; font-weight:800; letter-spacing:-.02em; line-height:1; }
+.stat .sm{ font-size:14px; color:var(--muted); font-weight:600; }
+.stat .k{ font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-top:6px; }
+.stat .pick{ font-size:13px; font-weight:600; margin-top:4px; color:var(--accentInk); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.controls{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:18px 0 8px; }
+.search{ flex:1 1 220px; min-width:160px; position:relative; }
+.search input{ width:100%; border:1px solid var(--line); background:var(--card); border-radius:10px;
+  padding:10px 12px 10px 36px; font-family:inherit; font-size:14px; color:var(--ink); }
+.search input:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color:transparent; }
+.search svg{ position:absolute; left:11px; top:50%; transform:translateY(-50%); opacity:.45; }
+.seg{ display:flex; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:3px; }
+.seg button{ border:none; background:none; cursor:pointer; font-family:inherit; font-size:13px;
+  font-weight:600; color:var(--muted); padding:7px 13px; border-radius:7px; transition:.15s; }
+.seg button[aria-pressed="true"]{ background:var(--accent); color:#fff; }
+.refresh{ margin-left:auto; display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--muted); }
+.refresh button{ border:1px solid var(--line); background:var(--card); cursor:pointer; border-radius:9px;
+  padding:8px 10px; display:flex; align-items:center; gap:6px; font-family:inherit; font-size:13px; font-weight:600; color:var(--ink); }
+.refresh button:hover{ border-color:var(--accent); color:var(--accentInk); }
+.spin{ animation:spin 1s linear infinite; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+
+.grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(196px,1fr)); gap:12px; margin-top:14px; }
+
+.sign{ background:var(--card); border:1px solid var(--line); border-radius:16px; overflow:hidden;
+  display:flex; flex-direction:column; animation:fade .35s ease both; }
+@keyframes fade{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
+.sign .top{ padding:13px 14px 10px; flex:1; }
+.name{ font-size:15px; font-weight:700; line-height:1.2; letter-spacing:-.01em; }
+.tags{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+.pill{ font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:3px 7px; border-radius:6px; background:#eef1f6; color:#5a647a; }
+.pill.ll{ background:#efe9ff; color:#5a3fc0; }
+.pill.vq{ background:#e2f3ff; color:#1f6fa8; }
+
+.num{ padding:11px 14px; display:flex; align-items:baseline; gap:6px; }
+.num .n{ font-size:38px; font-weight:800; line-height:.9; letter-spacing:-.03em; }
+.num .u{ font-size:13px; font-weight:700; opacity:.85; }
+.num .eyebrow{ margin-left:auto; font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; opacity:.7; align-self:flex-start; padding-top:3px; }
+.num.walk .n{ font-size:24px; align-self:center; }
+
+.status{ padding:14px; display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px; }
+.status .ic{ width:9px; height:9px; border-radius:50%; }
+.status.down{ background:#fff5e6; color:#9a6708; } .status.down .ic{ background:#cf8a1f; }
+.status.closed{ background:#f3f4f7; color:#6a7388; } .status.closed .ic{ background:#9aa3b5; }
+.status.refurb{ background:#f3f4f7; color:#6a7388; } .status.refurb .ic{ background:#9aa3b5; }
+
+.show{ padding:12px 14px; font-size:13px; font-weight:600; color:var(--accentInk); background:var(--accentSoft); }
+.show small{ display:block; font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:3px; }
+
+.msg{ text-align:center; padding:54px 20px; color:var(--muted); }
+.msg h3{ color:var(--ink); font-size:18px; margin:0 0 6px; }
+.msg p{ font-size:14px; }
+.msg button{ margin-top:14px; border:none; background:var(--accent); color:#fff; cursor:pointer; font-family:inherit; font-weight:600; font-size:14px; padding:10px 18px; border-radius:10px; }
+.skel{ height:118px; border-radius:16px; background:linear-gradient(90deg,#e9edf4 25%,#f3f6fb 50%,#e9edf4 75%); background-size:200% 100%; animation:shimmer 1.3s infinite; }
+@keyframes shimmer{ to{ background-position:-200% 0; } }
+
+.foot{ text-align:center; font-size:12px; color:var(--muted); margin-top:34px; line-height:1.6; }
+
+@media (max-width:560px){
+  .stats{ grid-template-columns:repeat(2,1fr); }
+  .title{ font-size:24px; }
+  .refresh{ margin-left:0; width:100%; justify-content:space-between; }
+}
+@media (prefers-reduced-motion: reduce){
+  .dot,.spin,.sign,.skel{ animation:none !important; }
+}
+</style>
+</head>
+<body>
+<div class="band"><div class="inner">
+  <div class="kicker"><span class="dot"></span> Live wait times</div>
+  <div class="title">Walt Disney World</div>
+  <div class="sub" id="sub">Standby waits, refreshed every minute</div>
+</div></div>
+<div class="tabs-wrap"><div class="tabs" id="tabs" role="tablist" aria-label="Parks"></div></div>
+<div class="body">
+  <div class="stats" id="stats"></div>
+  <div class="controls">
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input id="search" placeholder="Search rides…" autocomplete="off" />
+    </div>
+    <div class="seg" id="typeSeg" role="group" aria-label="Type">
+      <button data-type="ATTRACTION" aria-pressed="true">Rides</button>
+      <button data-type="SHOW" aria-pressed="false">Shows</button>
+    </div>
+    <div class="seg" id="sortSeg" role="group" aria-label="Sort">
+      <button data-sort="wait" aria-pressed="true">Shortest</button>
+      <button data-sort="longest" aria-pressed="false">Longest</button>
+      <button data-sort="name" aria-pressed="false">A–Z</button>
+    </div>
+    <div class="seg" role="group" aria-label="Filter">
+      <button id="openOnly" aria-pressed="false">Open only</button>
+    </div>
+    <div class="refresh">
+      <span id="updated"></span>
+      <button id="refreshBtn" aria-label="Refresh now">
+        <svg id="refreshIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
+        Refresh
+      </button>
+    </div>
+  </div>
+  <div id="content"></div>
+  <div class="foot">
+    Standby waits are posted estimates and shift fast — treat them as a guide, not a guarantee.<br />
+    Live data from ThemeParks.wiki. Not affiliated with the Walt Disney Company.
+  </div>
+</div>
+
+<script>
+const PARKS = [
+  { id:"75ea578a-adc8-4116-a54d-dccb60765ef9", name:"Magic Kingdom",     short:"Magic Kingdom",     accent:"#5b4bd6", accentInk:"#2b2270", soft:"rgba(91,75,214,0.12)" },
+  { id:"47f90d2c-e191-4239-a466-5892ef59a88b", name:"EPCOT",             short:"EPCOT",             accent:"#149aa6", accentInk:"#0c5159", soft:"rgba(20,154,166,0.12)" },
+  { id:"288747d1-8b4f-4a64-867e-ea7c9b27bad8", name:"Hollywood Studios", short:"Hollywood Studios", accent:"#cf8a1f", accentInk:"#7a4f08", soft:"rgba(207,138,31,0.12)" },
+  { id:"1c84a229-8862-4648-9c71-378ddd2c7693", name:"Animal Kingdom",    short:"Animal Kingdom",    accent:"#3f8a3a", accentInk:"#1f4d1c", soft:"rgba(63,138,58,0.12)" },
+];
+
+const state = { parkId:PARKS[0].id, items:[], loading:true, error:null, fetchedAt:null,
+  query:"", type:"ATTRACTION", sort:"wait", openOnly:false };
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const standby = (it) => (it && it.queue && it.queue.STANDBY && it.queue.STANDBY.waitTime != null) ? it.queue.STANDBY.waitTime : null;
+
+function waitBand(min){
+  if (min == null) return null;
+  if (min <= 0)  return { key:"walk",  fg:"#0f7a44", bg:"#e4f6ec", num:"#0f7a44" };
+  if (min <= 20) return { key:"short", fg:"#0f7a44", bg:"#e4f6ec", num:"#10864a" };
+  if (min <= 45) return { key:"med",   fg:"#9a6708", bg:"#fbf0d8", num:"#b9791a" };
+  if (min <= 75) return { key:"long",  fg:"#a8451a", bg:"#fbe6da", num:"#c2511c" };
+  return { key:"vlong", fg:"#a32626", bg:"#fbe0e0", num:"#cf3030" };
+}
+function timeAgo(ts){
+  if (!ts) return "";
+  const s = Math.round((Date.now() - ts)/1000);
+  if (s < 5) return "just now";
+  if (s < 60) return s+"s ago";
+  const m = Math.round(s/60);
+  if (m < 60) return m+" min ago";
+  return Math.round(m/60)+"h ago";
+}
+function clock(iso){ if(!iso) return null; try { return new Date(iso).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}); } catch(e){ return null; } }
+const park = () => PARKS.find(p => p.id === state.parkId);
+
+async function load(soft){
+  if (!soft){ state.loading = true; state.error = null; render(); }
+  setRefreshSpin(true);
+  try {
+    const res = await fetch("https://api.themeparks.wiki/v1/entity/" + state.parkId + "/live");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const json = await res.json();
+    state.items = Array.isArray(json.liveData) ? json.liveData : [];
+    state.fetchedAt = Date.now();
+    state.error = null;
+  } catch(e){
+    if (!soft) state.error = e.message || "fetch failed";
+  } finally {
+    state.loading = false;
+    setRefreshSpin(false);
+    render();
+  }
+}
+function setRefreshSpin(on){ $("refreshIcon").classList.toggle("spin", !!on); }
+
+function applyTheme(){
+  const p = park();
+  document.documentElement.style.setProperty("--accent", p.accent);
+  document.documentElement.style.setProperty("--accentInk", p.accentInk);
+  document.documentElement.style.setProperty("--accentSoft", p.soft);
+  document.querySelector('meta[name="theme-color"]').setAttribute("content", p.accent);
+  $("sub").textContent = "Standby waits, refreshed every minute · " + p.name;
+}
+
+function buildTabs(){
+  $("tabs").innerHTML = PARKS.map(p =>
+    `<button class="tab" role="tab" data-id="${p.id}" aria-selected="${p.id===state.parkId}">${esc(p.short)}</button>`
+  ).join("");
+  $("tabs").querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => {
+    state.parkId = b.dataset.id; state.query = ""; $("search").value = "";
+    state.items = []; applyTheme(); buildTabs(); load(false);
+  }));
+}
+
+function computeList(){
+  let arr = state.items.filter(it => it.entityType === state.type);
+  if (state.openOnly) arr = arr.filter(it => it.status === "OPERATING");
+  const q = state.query.trim().toLowerCase();
+  if (q) arr = arr.filter(it => (it.name||"").toLowerCase().includes(q));
+  const rank = it => it.status==="OPERATING" ? 0 : it.status==="DOWN" ? 1 : 2;
+  return arr.slice().sort((a,b) => {
+    if (state.sort === "name") return (a.name||"").localeCompare(b.name||"");
+    const ra=rank(a), rb=rank(b); if (ra!==rb) return ra-rb;
+    const wa=standby(a), wb=standby(b);
+    if (wa==null && wb==null) return (a.name||"").localeCompare(b.name||"");
+    if (wa==null) return 1; if (wb==null) return -1;
+    return state.sort==="longest" ? wb-wa : wa-wb;
+  });
+}
+
+function renderStats(list){
+  const rides = state.items.filter(it => it.entityType === "ATTRACTION");
+  const open = rides.filter(it => it.status === "OPERATING");
+  const waits = open.map(standby).filter(w => w != null);
+  const avg = waits.length ? Math.round(waits.reduce((a,b)=>a+b,0)/waits.length) : null;
+  let best = null;
+  open.forEach(it => { const w = standby(it); if (w==null) return; if (!best || w < best.w) best = {w, name:it.name}; });
+  $("stats").innerHTML =
+    `<div class="stat"><div class="v">${open.length}<span class="sm">/${rides.length}</span></div><div class="k">Rides open</div></div>
+     <div class="stat"><div class="v">${avg!=null?avg:"—"}<span class="sm">${avg!=null?" min":""}</span></div><div class="k">Average wait</div></div>
+     <div class="stat"><div class="v" style="color:var(--accentInk)">${best?best.w:"—"}<span class="sm">${best?" min":""}</span></div><div class="k">Shortest now</div>${best?`<div class="pick">${esc(best.name)}</div>`:""}</div>
+     <div class="stat"><div class="v">${state.type==="ATTRACTION"?"Rides":"Shows"}</div><div class="k">${list.length} listed</div></div>`;
+}
+
+function signHTML(it){
+  const ll = it.queue && it.queue.PAID_RETURN_TIME;
+  const vq = it.queue && it.queue.RETURN_TIME;
+  const llTime = ll && ll.returnStart ? clock(ll.returnStart) : null;
+  const isShow = it.entityType === "SHOW";
+  let tags = "";
+  if (llTime) tags += `<span class="pill ll">Lightning Lane · ${esc(llTime)}</span>`;
+  if (vq && vq.state === "AVAILABLE") tags += `<span class="pill vq">Virtual queue</span>`;
+
+  let footer;
+  if (it.status === "OPERATING" && !isShow){
+    const w = standby(it); const band = waitBand(w);
+    if (band){
+      footer = band.key === "walk"
+        ? `<div class="num walk" style="background:${band.bg};color:${band.num}"><span class="n">Walk on</span><span class="eyebrow" style="color:${band.fg}">Standby</span></div>`
+        : `<div class="num" style="background:${band.bg};color:${band.num}"><span class="n">${w}</span><span class="u">min</span><span class="eyebrow" style="color:${band.fg}">Standby</span></div>`;
+    } else {
+      footer = `<div class="num" style="background:#f3f4f7;color:#6a7388"><span class="n" style="font-size:22px;align-self:center">Open</span><span class="eyebrow">No posted wait</span></div>`;
+    }
+  } else if (it.status === "OPERATING" && isShow){
+    const upcoming = (it.showtimes||[]).find(s => new Date(s.startTime).getTime() > Date.now()) || (it.showtimes||[])[0];
+    footer = `<div class="show"><small>${upcoming?"Next show":"Status"}</small>${upcoming ? (clock(upcoming.startTime)||"Scheduled") : "Operating"}</div>`;
+  } else if (it.status === "DOWN"){
+    footer = `<div class="status down"><span class="ic"></span> Temporarily down</div>`;
+  } else if (it.status === "REFURBISHMENT"){
+    footer = `<div class="status refurb"><span class="ic"></span> Refurbishment</div>`;
+  } else {
+    footer = `<div class="status closed"><span class="ic"></span> Closed</div>`;
+  }
+  return `<div class="sign"><div class="top"><div class="name">${esc(it.name)}</div>${tags?`<div class="tags">${tags}</div>`:""}</div>${footer}</div>`;
+}
+
+function render(){
+  const list = computeList();
+  renderStats(list);
+  $("updated").textContent = state.fetchedAt ? "Updated " + timeAgo(state.fetchedAt) : "";
+  const c = $("content");
+  if (state.loading && state.items.length === 0){
+    c.innerHTML = `<div class="grid">${Array.from({length:8}).map(()=>`<div class="skel"></div>`).join("")}</div>`;
+  } else if (state.error){
+    c.innerHTML = `<div class="msg"><h3>Couldn't load live data</h3><p>The wait-time service didn't respond. Check your connection and try again.</p><button id="retry">Try again</button></div>`;
+    $("retry").addEventListener("click", () => load(false));
+  } else if (list.length === 0){
+    const kind = state.type === "ATTRACTION" ? "rides" : "shows";
+    c.innerHTML = `<div class="msg"><h3>Nothing to show</h3><p>${state.query?`No ${kind} match "${esc(state.query)}".`:"No matching attractions right now."}</p></div>`;
+  } else {
+    c.innerHTML = `<div class="grid">${list.map(signHTML).join("")}</div>`;
+  }
+}
+
+// listeners
+$("search").addEventListener("input", e => { state.query = e.target.value; render(); });
+$("typeSeg").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+  state.type = b.dataset.type;
+  $("typeSeg").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x===b));
+  render();
+}));
+$("sortSeg").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+  state.sort = b.dataset.sort;
+  $("sortSeg").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x===b));
+  render();
+}));
+$("openOnly").addEventListener("click", () => {
+  state.openOnly = !state.openOnly;
+  $("openOnly").setAttribute("aria-pressed", state.openOnly);
+  render();
+});
+$("refreshBtn").addEventListener("click", () => load(false));
+
+// boot
+applyTheme();
+buildTabs();
+load(false);
+setInterval(() => load(true), 60000);
+setInterval(() => { $("updated").textContent = state.fetchedAt ? "Updated " + timeAgo(state.fetchedAt) : ""; }, 15000);
+</script>
+</body>
+</html>
